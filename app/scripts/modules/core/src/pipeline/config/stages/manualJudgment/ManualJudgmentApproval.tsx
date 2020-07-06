@@ -5,6 +5,8 @@ import { IExecution, IExecutionStage } from 'core/domain';
 import { Application } from 'core/application/application.model';
 import { Markdown } from 'core/presentation/Markdown';
 import { NgReact, ReactInjector } from 'core/reactShims';
+import { ApplicationReader } from 'core/application/service/ApplicationReader';
+import { AuthenticationService } from 'core/authentication';
 
 export interface IManualJudgmentApprovalProps {
   execution: IExecution;
@@ -17,6 +19,9 @@ export interface IManualJudgmentApprovalState {
   judgmentDecision: string;
   judgmentInput: { value?: string };
   error: boolean;
+  applicationRoles: { READ?: string[]; WRITE?: string[]; EXECUTE?: string[]; CREATE?: string[] };
+  runOnce: boolean;
+  userRoles: string[];
 }
 
 export class ManualJudgmentApproval extends React.Component<
@@ -30,7 +35,32 @@ export class ManualJudgmentApproval extends React.Component<
       judgmentDecision: null,
       judgmentInput: {},
       error: false,
+      applicationRoles: {},
+      runOnce: true,
+      userRoles: [],
     };
+  }
+
+  public componentDidMount() {
+      if (this.state.runOnce) {
+          const applicationName = this.props.execution.application;
+          ApplicationReader.getApplicationPermissions(applicationName)
+              .then(result => {
+                  if (typeof result !== 'undefined') {
+                      this.setState({
+                          applicationRoles: result,
+                          runOnce: false,
+                      })
+                      this.isStageAuthorized();
+                  }
+              })
+              .catch(error => this.setState({
+                  error,
+              }));
+          this.setState({
+              userRoles: AuthenticationService.getAuthenticatedUser().roles
+          });
+      }
   }
 
   private provideJudgment(judgmentDecision: string): void {
@@ -50,6 +80,35 @@ export class ManualJudgmentApproval extends React.Component<
   private handleJudgementChanged = (option: Option): void => {
     this.setState({ judgmentInput: { value: option.value as string } });
   };
+
+  private isStageAuthorized(): boolean {
+
+      let disableBtn = true;
+      let usrRole;
+      const stageRoles = this.props.stage.context.selectedStageRoles || [];
+      const readArray = this.state.applicationRoles['READ'] || [];
+      const writeArray = this.state.applicationRoles['WRITE'] || [];
+      const executeArray = this.state.applicationRoles['EXECUTE'] || [];
+      const createArray = this.state.applicationRoles['CREATE'] || [];
+      const usrRoles = this.state.userRoles;
+      if (stageRoles.length === 0) {
+          disableBtn = false;
+          return disableBtn;
+      }
+      for (usrRole of usrRoles) {
+          if (stageRoles.indexOf(usrRole) > -1) {
+              if (writeArray.indexOf(usrRole) > -1 ||
+                  executeArray.indexOf(usrRole) > -1 ||
+                  createArray.indexOf(usrRole) > -1) {
+                  disableBtn = false;
+                  break;
+              } else if (readArray.indexOf(usrRole) > -1) {
+                  disableBtn = true;
+              }
+          }
+      }
+      return disableBtn;
+  }
 
   private handleContinueClick = (): void => {
     this.provideJudgment('continue');
@@ -103,7 +162,7 @@ export class ManualJudgmentApproval extends React.Component<
                 className="btn btn-danger"
                 onClick={this.handleStopClick}
                 disabled={
-                  this.state.submitting ||
+                  this.isStageAuthorized() || this.state.submitting ||
                   stage.context.judgmentStatus ||
                   (options.length && !this.state.judgmentInput.value)
                 }
@@ -114,7 +173,7 @@ export class ManualJudgmentApproval extends React.Component<
               <button
                 className="btn btn-primary"
                 disabled={
-                  this.state.submitting ||
+                  this.isStageAuthorized() || this.state.submitting ||
                   stage.context.judgmentStatus ||
                   (options.length && !this.state.judgmentInput.value)
                 }
