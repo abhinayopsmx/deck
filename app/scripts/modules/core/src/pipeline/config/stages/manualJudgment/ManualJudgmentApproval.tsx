@@ -162,7 +162,8 @@ export class ManualJudgmentApproval extends React.Component<
                 className="btn btn-danger"
                 onClick={this.handleStopClick}
                 disabled={
-                  this.isStageAuthorized() || this.state.submitting ||
+                  this.isStageAuthorized() ||
+                  this.state.submitting ||
                   stage.context.judgmentStatus ||
                   (options.length && !this.state.judgmentInput.value)
                 }
@@ -173,7 +174,8 @@ export class ManualJudgmentApproval extends React.Component<
               <button
                 className="btn btn-primary"
                 disabled={
-                  this.isStageAuthorized() || this.state.submitting ||
+                  this.isStageAuthorized() ||
+                  this.state.submitting ||
                   stage.context.judgmentStatus ||
                   (options.length && !this.state.judgmentInput.value)
                 }
